@@ -4,10 +4,8 @@ import os
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from dotenv import load_dotenv
 from mcstatus import JavaServer
 
-load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
