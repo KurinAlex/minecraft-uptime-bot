@@ -148,7 +148,7 @@ async def monitor(bot: Bot):
 
         if not online:
             last_players.clear()
-        elif status.players.sample:
+        elif status.players.sample is not None:
             current_players = set(player.name for player in status.players.sample)
 
             joined_players = current_players - last_players
