@@ -16,6 +16,10 @@ class Config:
     def bot_token(cls) -> str:
         return cls._get_env_variable("BOT_TOKEN")
 
+    @classmethod
+    def check_interval(cls) -> int:
+        return int(cls._get_env_variable("CHECK_INTERVAL_SECONDS"))
+
     @staticmethod
     def _get_env_variable(name: str) -> str:
         if name in Config._cache:
