@@ -135,6 +135,9 @@ async def notify_subscribers(bot: Bot, online: bool):
             logger.error(f"Failed to send message to {chat_id}: {e}")
 
 
+last_status = None
+
+
 async def monitor(bot: Bot):
     global last_status
 
