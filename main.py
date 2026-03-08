@@ -117,16 +117,10 @@ async def set_default_commands(bot: Bot):
     await bot.set_my_commands(commands)
 
 
-async def notify_subscribers(bot: Bot, online: bool):
+async def notify_subscribers(bot: Bot, message: str):
     subscribers = load_subscriptions()
     if not subscribers:
         return
-
-    message = (
-        "🟢 Minecraft server is back ONLINE"
-        if online
-        else "🔴 Minecraft server went OFFLINE"
-    )
 
     for chat_id in subscribers:
         try:
@@ -135,23 +129,37 @@ async def notify_subscribers(bot: Bot, online: bool):
             logger.error(f"Failed to send message to {chat_id}: {e}")
 
 
-last_status = None
+last_status: bool | None = None
+last_players: set[str] = set()
 
 
 async def monitor(bot: Bot):
     global last_status
+    global last_players
 
     while True:
         status = await get_mc_status()
-        online = status is not None
 
-        if last_status is None:
+        online = status is not None
+        if online != last_status:
+            message = "🟢 Server is back ONLINE" if online else "🔴 Server went OFFLINE"
+            await notify_subscribers(bot, message)
             last_status = online
 
-        if online != last_status:
-            await notify_subscribers(bot, online)
+        if not online:
+            last_players.clear()
+        elif status.players.sample:
+            current_players = set(player.name for player in status.players.sample)
 
-        last_status = online
+            joined_players = current_players - last_players
+            for player in joined_players:
+                await notify_subscribers(bot, f"🎉 {player} joined the server.")
+
+            left_players = last_players - current_players
+            for player in left_players:
+                await notify_subscribers(bot, f"👋 {player} left the server.")
+
+            last_players = current_players
 
         await asyncio.sleep(Config.check_interval())
 
