@@ -4,6 +4,7 @@ import logging
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
+from aiogram.types import BotCommand, BotCommandScopeDefault
 from mcstatus import JavaServer
 
 from config import Config
@@ -74,9 +75,33 @@ async def unsubscribe_command(message: types.Message):
         await message.answer("🔕 You are now unsubscribed from server status updates.")
 
 
+async def set_default_commands(bot: Bot):
+    commands = [
+        BotCommand(
+            command="start",
+            description="⚡ Start the bot",
+        ),
+        BotCommand(
+            command="status",
+            description="❔ Check the Minecraft server status",
+        ),
+        BotCommand(
+            command="subscribe",
+            description="🔔 Subscribe to server status updates",
+        ),
+        BotCommand(
+            command="unsubscribe",
+            description="🔕 Unsubscribe from server status updates",
+        ),
+    ]
+
+    await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
+
+
 async def main():
     bot_token = Config.bot_token()
     bot = Bot(token=bot_token)
+    await set_default_commands(bot)
     await dp.start_polling(bot)
 
 
