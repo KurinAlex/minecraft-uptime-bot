@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -41,19 +42,32 @@ async def status_command(message: types.Message):
     await message.answer(text)
 
 
+SUBSCRIBERS_FILE = "subscribers.json"
+
+
+def load_subscriptions():
+    if not os.path.exists(SUBSCRIBERS_FILE):
+        save_subscriptions([])
+
+    with open(SUBSCRIBERS_FILE) as f:
+        return json.load(f)
+
+
+def save_subscriptions(subscribers):
+    with open(SUBSCRIBERS_FILE, "w") as f:
+        json.dump(subscribers, f)
+
+
 @dp.message(Command("subscribe"))
 async def subscribe_command(message: types.Message):
     async with subscription_lock:
-        with open("subscriptions.json") as f:
-            subscribers = json.load(f)
-
+        subscribers = load_subscriptions()
         if message.chat.id in subscribers:
             await message.answer("🔔 You are already subscribed.")
             return
 
         subscribers.append(message.chat.id)
-        with open("subscriptions.json", "w") as f:
-            json.dump(subscribers, f)
+        save_subscriptions(subscribers)
 
         await message.answer("🔔 You are now subscribed to server status updates.")
 
@@ -61,16 +75,13 @@ async def subscribe_command(message: types.Message):
 @dp.message(Command("unsubscribe"))
 async def unsubscribe_command(message: types.Message):
     async with subscription_lock:
-        with open("subscriptions.json") as f:
-            subscribers = json.load(f)
-
+        subscribers = load_subscriptions()
         if message.chat.id not in subscribers:
             await message.answer("🔕 You are not subscribed.")
             return
 
         subscribers.remove(message.chat.id)
-        with open("subscriptions.json", "w") as f:
-            json.dump(subscribers, f)
+        save_subscriptions(subscribers)
 
         await message.answer("🔕 You are now unsubscribed from server status updates.")
 
