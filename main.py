@@ -1,34 +1,20 @@
 import asyncio
 import logging
-import os
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from mcstatus import JavaServer
 
+from config import Config
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def get_env_variable(name: str) -> str:
-    """Retrieve required environment variable or raise error."""
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"Environment variable '{name}' is required.")
-    return value
-
-
-server_host = get_env_variable("MC_SERVER_HOST")
-server_port = int(get_env_variable("MC_SERVER_PORT"))
-
-
-def check_minecraft():
-    try:
-        server = JavaServer.lookup(f"{server_host}:{server_port}")
-        server.status()
-        return True
-    except Exception:
-        return False
+def get_mc_status():
+    server = JavaServer.lookup(f"{Config.mc_server_host()}:{Config.mc_server_port()}")
+    status = server.status()
+    return status
 
 
 dp = Dispatcher()
@@ -36,13 +22,24 @@ dp = Dispatcher()
 
 @dp.message(Command("status"))
 async def status_command(message: types.Message):
-    online = check_minecraft()
-    text = "🟢 Server is ONLINE" if online else "🔴 Server is OFFLINE"
+    try:
+        status = get_mc_status()
+        text = "🟢 Server is ONLINE\n\n"
+        if status.players.online == 0:
+            text += "No players are currently online."
+        elif status.players.sample:
+            players = "\n".join(f"- {player.name}" for player in status.players.sample)
+            text += f"Now playing:\n{players}"
+        else:
+            text += f"{status.players.online} player(s) are currently online."
+    except Exception:
+        text = "🔴 Server is OFFLINE"
+
     await message.answer(text)
 
 
 async def main():
-    bot_token = get_env_variable("BOT_TOKEN")
+    bot_token = Config.bot_token()
     bot = Bot(token=bot_token)
     await dp.start_polling(bot)
 
