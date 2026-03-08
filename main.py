@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 
 from aiogram import Bot, Dispatcher, types
@@ -17,6 +18,7 @@ def get_mc_status():
     return status
 
 
+subscription_lock = asyncio.Lock()
 dp = Dispatcher()
 
 
@@ -36,6 +38,40 @@ async def status_command(message: types.Message):
         text = "🔴 Server is OFFLINE"
 
     await message.answer(text)
+
+
+@dp.message(Command("subscribe"))
+async def subscribe_command(message: types.Message):
+    async with subscription_lock:
+        with open("subscriptions.json") as f:
+            subscribers = json.load(f)
+
+        if message.chat.id in subscribers:
+            await message.answer("🔔 You are already subscribed.")
+            return
+
+        subscribers.append(message.chat.id)
+        with open("subscriptions.json", "w") as f:
+            json.dump(subscribers, f)
+
+        await message.answer("🔔 You are now subscribed to server status updates.")
+
+
+@dp.message(Command("unsubscribe"))
+async def unsubscribe_command(message: types.Message):
+    async with subscription_lock:
+        with open("subscriptions.json") as f:
+            subscribers = json.load(f)
+
+        if message.chat.id not in subscribers:
+            await message.answer("🔕 You are not subscribed.")
+            return
+
+        subscribers.remove(message.chat.id)
+        with open("subscriptions.json", "w") as f:
+            json.dump(subscribers, f)
+
+        await message.answer("🔕 You are now unsubscribed from server status updates.")
 
 
 async def main():
