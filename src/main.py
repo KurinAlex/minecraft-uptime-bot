@@ -9,7 +9,7 @@ from aiogram.types import BotCommand
 from mcstatus import JavaServer
 from mcstatus.responses import JavaStatusResponse
 
-from src.config import Config
+from config import Config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
