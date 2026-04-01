@@ -1,97 +1,12 @@
 import asyncio
-import json
 import logging
-import os
 
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
+from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
-from mcstatus import JavaServer
-from mcstatus.responses import JavaStatusResponse
 
 from config import Config
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-async def get_mc_status() -> JavaStatusResponse | None:
-    try:
-        server = JavaServer.lookup(
-            f"{Config.mc_server_host()}:{Config.mc_server_port()}"
-        )
-        status = await server.async_status()
-        return status
-    except Exception:
-        return None
-
-
-subscription_lock = asyncio.Lock()
-dp = Dispatcher()
-
-
-@dp.message(Command("status"))
-async def status_command(message: types.Message):
-    status = await get_mc_status()
-    if not status:
-        text = "🔴 Server is OFFLINE"
-        await message.answer(text)
-        return
-
-    text = "🟢 Server is ONLINE\n\n"
-    if status.players.online == 0:
-        text += "No players are currently online."
-    elif status.players.sample:
-        players = "\n".join(f"- {player.name}" for player in status.players.sample)
-        text += f"Now playing:\n{players}"
-    else:
-        text += f"{status.players.online} player(s) are currently online."
-
-    await message.answer(text)
-
-
-SUBSCRIBERS_FILE = "subscribers.json"
-
-
-def load_subscriptions():
-    if not os.path.exists(SUBSCRIBERS_FILE):
-        save_subscriptions([])
-
-    with open(SUBSCRIBERS_FILE) as f:
-        return json.load(f)
-
-
-def save_subscriptions(subscribers):
-    with open(SUBSCRIBERS_FILE, "w") as f:
-        json.dump(subscribers, f)
-
-
-@dp.message(Command("subscribe"))
-async def subscribe_command(message: types.Message):
-    async with subscription_lock:
-        subscribers = load_subscriptions()
-        if message.chat.id in subscribers:
-            await message.answer("🔔 You are already subscribed.")
-            return
-
-        subscribers.append(message.chat.id)
-        save_subscriptions(subscribers)
-
-        await message.answer("🔔 You are now subscribed to server status updates.")
-
-
-@dp.message(Command("unsubscribe"))
-async def unsubscribe_command(message: types.Message):
-    async with subscription_lock:
-        subscribers = load_subscriptions()
-        if message.chat.id not in subscribers:
-            await message.answer("🔕 You are not subscribed.")
-            return
-
-        subscribers.remove(message.chat.id)
-        save_subscriptions(subscribers)
-
-        await message.answer("🔕 You are now unsubscribed from server status updates.")
+from routers import status_router, subscription_router
+from services.mcserver import monitor
 
 
 async def set_default_commands(bot: Bot):
@@ -117,61 +32,15 @@ async def set_default_commands(bot: Bot):
     await bot.set_my_commands(commands)
 
 
-async def notify_subscribers(bot: Bot, message: str):
-    subscribers = load_subscriptions()
-    if not subscribers:
-        return
-
-    for chat_id in subscribers:
-        try:
-            await bot.send_message(chat_id, message)
-        except Exception as e:
-            logger.error(f"Failed to send message to {chat_id}: {e}")
-
-
-last_status: bool | None = None
-last_players: set[str] = set()
-
-
-async def monitor(bot: Bot):
-    global last_status
-    global last_players
-
-    while True:
-        status = await get_mc_status()
-
-        online = status is not None
-        if online != last_status:
-            message = "🟢 Server is back ONLINE" if online else "🔴 Server went OFFLINE"
-            await notify_subscribers(bot, message)
-            last_status = online
-
-        if not online:
-            last_players.clear()
-        else:
-            current_players = (
-                set(player.name for player in status.players.sample)
-                if status.players.sample
-                else set()
-            )
-
-            joined_players = current_players - last_players
-            for player in joined_players:
-                await notify_subscribers(bot, f"🎉 {player} joined the server.")
-
-            left_players = last_players - current_players
-            for player in left_players:
-                await notify_subscribers(bot, f"👋 {player} left the server.")
-
-            last_players = current_players
-
-        await asyncio.sleep(Config.check_interval())
-
-
 async def main():
-    bot_token = Config.bot_token()
-    bot = Bot(token=bot_token)
+    logging.basicConfig(level=logging.INFO)
+
+    bot = Bot(token=Config.bot_token())
     await set_default_commands(bot)
+
+    dp = Dispatcher()
+    dp.include_router(status_router)
+    dp.include_router(subscription_router)
 
     asyncio.create_task(monitor(bot))
     await dp.start_polling(bot)
