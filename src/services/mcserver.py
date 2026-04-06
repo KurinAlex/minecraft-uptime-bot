@@ -4,14 +4,13 @@ import logging
 from aiogram import Bot
 from mcstatus import JavaServer
 from mcstatus.responses import JavaStatusResponse
+from sqlalchemy import select
 
 from config import Config
-from services.subscription import load_subscriptions, subscription_lock
+from data.db import Database
+from data.models import User
 
 logger = logging.getLogger(__name__)
-
-last_status: bool | None = None
-last_players: set[str] = set()
 
 
 async def get_mc_status() -> JavaStatusResponse | None:
@@ -26,22 +25,21 @@ async def get_mc_status() -> JavaStatusResponse | None:
 
 
 async def notify_subscribers(bot: Bot, message: str):
-    async with subscription_lock:
-        subscribers = load_subscriptions()
-        
-    if not subscribers:
-        return
+    async with Database.async_session() as session:
+        query = select(User).where(User.is_subscribed)
+        result = await session.execute(query)
+        subscribed_users = result.scalars().all()
 
-    for chat_id in subscribers:
+    for user in subscribed_users:
         try:
-            await bot.send_message(chat_id, message)
+            await bot.send_message(user.chat_id, message)
         except Exception as e:
-            logger.error(f"Failed to send message to {chat_id}: {e}")
+            logger.exception(f"Failed to send message to {user.chat_id}: {e}")
 
 
 async def monitor(bot: Bot):
-    global last_status
-    global last_players
+    last_status: bool | None = None
+    last_players: set[str] = {}
 
     while True:
         status = await get_mc_status()
