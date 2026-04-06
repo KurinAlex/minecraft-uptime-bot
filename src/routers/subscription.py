@@ -1,38 +1,48 @@
 from aiogram import Router, types
 from aiogram.filters import Command
+from sqlalchemy import select
 
-from services.subscription import (
-    load_subscriptions,
-    save_subscriptions,
-    subscription_lock,
-)
+from data.db import AsyncSession
+from data.models import User
 
 subscription_router = Router(name=__name__)
 
 
 @subscription_router.message(Command("subscribe"))
-async def subscribe_command(message: types.Message):
-    async with subscription_lock:
-        subscribers = load_subscriptions()
-        if message.chat.id in subscribers:
-            await message.answer("🔔 You are already subscribed.")
-            return
+async def subscribe_command(message: types.Message, session: AsyncSession):
+    query = select(User).where(User.chat_id == message.chat.id)
+    result = await session.execute(query)
+    user: User = result.scalars().first()
 
-        subscribers.append(message.chat.id)
-        save_subscriptions(subscribers)
+    if not user:
+        user = User(chat_id=message.chat.id)
+        session.add(user)
+
+    if user.is_subscribed:
+        await message.answer("🔔 You are already subscribed.")
+        return
+
+    user.is_subscribed = True
+    await session.commit()
 
     await message.answer("🔔 You are now subscribed to server status updates.")
 
 
 @subscription_router.message(Command("unsubscribe"))
-async def unsubscribe_command(message: types.Message):
-    async with subscription_lock:
-        subscribers = load_subscriptions()
-        if message.chat.id not in subscribers:
-            await message.answer("🔕 You are not subscribed.")
-            return
+async def unsubscribe_command(message: types.Message, session: AsyncSession):
+    query = select(User).where(User.chat_id == message.chat.id)
+    result = await session.execute(query)
+    user: User = result.scalars().first()
 
-        subscribers.remove(message.chat.id)
-        save_subscriptions(subscribers)
+    if not user:
+        user = User(chat_id=message.chat.id)
+        session.add(user)
+
+    if not user.is_subscribed:
+        await message.answer("🔕 You are not subscribed.")
+        return
+
+    user.is_subscribed = False
+    await session.commit()
 
     await message.answer("🔕 You are now unsubscribed from server status updates.")
