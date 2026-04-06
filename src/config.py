@@ -15,6 +15,10 @@ class Config:
     @classmethod
     def bot_token(cls) -> str:
         return cls._get_env_variable("BOT_TOKEN")
+    
+    @classmethod
+    def database_url(cls) -> str:
+        return cls._get_env_variable("DATABASE_URL")
 
     @classmethod
     def check_interval(cls) -> int:
